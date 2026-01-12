@@ -27,7 +27,7 @@ An open-source, self-hosted personal health monitoring application that allows y
 
 ## Quick Start (Docker)
 
-The easiest way to run Bloodwork Tracker is with Docker Compose.
+The easiest way to run Longevilab is with Docker Compose using pre-built images.
 
 ### Prerequisites
 
@@ -36,16 +36,19 @@ The easiest way to run Bloodwork Tracker is with Docker Compose.
   - [Datalab.to](https://datalab.to) - for PDF OCR processing
   - [OpenAI](https://platform.openai.com) - for LLM extraction (or another supported provider)
 
-### 1. Clone the repository
+### Option A: Using Pre-built Images (Recommended)
+
+Pre-built Docker images are available on GitHub Container Registry for both AMD64 and ARM64 architectures.
 
 ```bash
-git clone https://github.com/gianniskotsas/longevilab.git
-cd longevilab
-```
+# Create a directory for the project
+mkdir longevilab && cd longevilab
 
-### 2. Create environment file
+# Download the docker-compose file for pre-built images
+curl -O https://raw.githubusercontent.com/gianniskotsas/longevilab/main/docker/docker-compose.images.yml
+curl -O https://raw.githubusercontent.com/gianniskotsas/longevilab/main/.env.example
 
-```bash
+# Create environment file
 cp .env.example .env
 ```
 
@@ -57,15 +60,33 @@ BETTER_AUTH_SECRET=your-secret-key-min-32-chars-here
 DATALAB_API_KEY=your-datalab-api-key
 OPENAI_API_KEY=your-openai-api-key
 
+# Set your server URL (important for authentication)
+BETTER_AUTH_URL=http://YOUR_SERVER_IP:3000
+NEXT_PUBLIC_APP_URL=http://YOUR_SERVER_IP:3000
+
 # Optional - customize these as needed
 POSTGRES_USER=bloodwork
 POSTGRES_PASSWORD=bloodwork
 POSTGRES_DB=bloodwork
 ```
 
-### 3. Start the services
+Start the services:
 
 ```bash
+docker compose -f docker-compose.images.yml up -d
+```
+
+### Option B: Build from Source
+
+```bash
+git clone https://github.com/gianniskotsas/longevilab.git
+cd longevilab
+
+# Create environment file
+cp .env.example .env
+# Edit .env with your values
+
+# Start services (builds locally)
 cd docker
 docker compose up -d
 ```
@@ -105,6 +126,30 @@ docker compose logs -f worker
 
 ```bash
 docker compose down
+```
+
+## CasaOS Installation
+
+For users running CasaOS on their home server:
+
+1. Open CasaOS Dashboard and go to **App Store**
+2. Click the **"+"** button and select **"Install a customized app"**
+3. Switch to the **"Docker Compose"** tab
+4. Copy the contents from `docker/docker-compose.images.yml`
+5. Replace environment variables:
+   - `YOUR_SERVER_IP` with your CasaOS server IP
+   - Add your API keys for `BETTER_AUTH_SECRET`, `DATALAB_API_KEY`, and `OPENAI_API_KEY`
+6. Click **Install**
+
+Alternatively, SSH into your CasaOS server:
+
+```bash
+mkdir -p /DATA/AppData/longevilab && cd /DATA/AppData/longevilab
+curl -O https://raw.githubusercontent.com/gianniskotsas/longevilab/main/docker/docker-compose.images.yml
+curl -O https://raw.githubusercontent.com/gianniskotsas/longevilab/main/.env.example
+cp .env.example .env
+nano .env  # Edit with your values
+docker compose -f docker-compose.images.yml up -d
 ```
 
 ## Manual Setup (Development)

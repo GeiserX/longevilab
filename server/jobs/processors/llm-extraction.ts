@@ -26,12 +26,8 @@ export async function processLlmExtractionJob(data: LlmExtractionJobData): Promi
       throw new Error(`No OCR text available for blood test: ${bloodTestId}`);
     }
 
-    console.log(`[LLM] Extracting biomarkers from ${bloodTest.ocrText.length} characters of text`);
-
     // Extract biomarkers using LLM
     const extractionResult = await extractBiomarkersFromText(bloodTest.ocrText);
-
-    console.log(`[LLM] Extracted ${extractionResult.biomarkers.length} biomarkers`);
 
     // Get all known biomarker codes from database
     const allBiomarkers = await db.query.biomarkers.findMany();
@@ -42,8 +38,6 @@ export async function processLlmExtractionJob(data: LlmExtractionJobData): Promi
       extractionResult.biomarkers,
       knownCodes
     );
-
-    console.log(`[LLM] ${validBiomarkers.length} biomarkers matched known codes`);
 
     // Create a map of code to biomarker info (id, canonicalUnit, and name)
     const codeToInfo = new Map(
@@ -74,12 +68,9 @@ export async function processLlmExtractionJob(data: LlmExtractionJobData): Promi
             if (convertedValue !== null) {
               finalValue = convertedValue.toString();
               finalUnit = info.canonicalUnit;
-              console.log(`[LLM] ${biomarker.code}: ${biomarker.value} ${biomarker.unit} → ${finalValue} ${finalUnit}`);
             }
           } else {
             // Fall back to LLM-based conversion for unknown units
-            console.log(`[LLM] ${biomarker.code}: Unknown unit "${biomarker.unit}", trying LLM conversion...`);
-
             const llmResult = await convertUnitWithLLM(
               biomarker.code,
               info.name,
@@ -91,9 +82,6 @@ export async function processLlmExtractionJob(data: LlmExtractionJobData): Promi
             if (llmResult) {
               finalValue = llmResult.convertedValue.toString();
               finalUnit = llmResult.unit;
-              console.log(`[LLM] ${biomarker.code}: LLM converted ${biomarker.value} ${biomarker.unit} → ${finalValue} ${finalUnit}`);
-            } else {
-              console.log(`[LLM] ${biomarker.code}: Could not convert "${biomarker.unit}", keeping original`);
             }
           }
         }
@@ -123,11 +111,7 @@ export async function processLlmExtractionJob(data: LlmExtractionJobData): Promi
       })
       .where(eq(bloodTests.id, bloodTestId));
 
-    console.log(`[LLM] Blood test ${bloodTestId} ready for review`);
-
   } catch (error) {
-    console.error(`[LLM] Error processing blood test ${bloodTestId}:`, error);
-
     // Update status to failed
     await db
       .update(bloodTests)

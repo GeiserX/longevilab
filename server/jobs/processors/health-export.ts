@@ -14,19 +14,11 @@ import { storage } from "@/server/services/storage";
 export async function processHealthExportJob(
   data: HealthExportJobData
 ): Promise<void> {
-  const { importId, filePath, userId, importFromDate } = data;
-
-  console.log(`[HealthExportProcessor] Starting job for import ${importId}`);
-  console.log(`[HealthExportProcessor] File path: ${filePath}`);
-  console.log(`[HealthExportProcessor] User ID: ${userId}`);
-  console.log(`[HealthExportProcessor] Import from date: ${importFromDate}`);
+  const { importId, filePath, userId, householdMemberId, importFromDate } = data;
 
   // Get the full file path from storage
   const fullPath = storage.getPath(filePath);
-  console.log(`[HealthExportProcessor] Full path: ${fullPath}`);
 
   // Run the import process
-  await processHealthExport(importId, fullPath, userId, importFromDate);
-
-  console.log(`[HealthExportProcessor] Job completed for import ${importId}`);
+  await processHealthExport(importId, fullPath, userId, householdMemberId, importFromDate);
 }

@@ -176,8 +176,8 @@ export default function ReviewPage() {
             ),
           })),
       });
-    } catch (err) {
-      console.error("Failed to confirm results:", err);
+    } catch {
+      // Error handling
     } finally {
       setSaving(false);
     }

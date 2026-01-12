@@ -20,24 +20,43 @@ import {
 export default function HomePage() {
   const { selectedMemberId } = useSelectedMember();
 
+  // Fetch household members to determine if we should wait for member selection
+  const { data: members, isLoading: membersLoading } = trpc.household.getMembers.useQuery();
+
+  // Determine if we should run queries
+  // Wait until members are loaded AND a member is selected
+  // The sidebar auto-selects the primary member on initial load
+  const shouldQuery = !membersLoading && (members?.length === 0 || !!selectedMemberId);
+
   // Fetch biological age data (filtered by selected member)
-  const { data: bioAgeData } = trpc.biologicalAge.calculate.useQuery({
-    householdMemberId: selectedMemberId,
-  });
+  const { data: bioAgeData } = trpc.biologicalAge.calculate.useQuery(
+    { householdMemberId: selectedMemberId },
+    { enabled: shouldQuery }
+  );
 
-  // Fetch latest journal entries by type (journal doesn't support member filtering yet)
-  const { data: latestByType } = trpc.journal.getLatestByType.useQuery();
+  // Fetch latest journal entries by type (filtered by selected member)
+  const { data: latestByType } = trpc.journal.getLatestByType.useQuery(
+    { householdMemberId: selectedMemberId },
+    { enabled: shouldQuery }
+  );
 
-  // Fetch weekly stats
-  const { data: weeklyStats } = trpc.journal.getWeeklyStats.useQuery();
+  // Fetch weekly stats (filtered by selected member)
+  const { data: weeklyStats } = trpc.journal.getWeeklyStats.useQuery(
+    { householdMemberId: selectedMemberId },
+    { enabled: shouldQuery }
+  );
 
-  // Fetch recent journal entries for activity feed
-  const { data: recentJournalEntries } = trpc.journal.getRecent.useQuery({ limit: 3 });
+  // Fetch recent journal entries for activity feed (filtered by selected member)
+  const { data: recentJournalEntries } = trpc.journal.getRecent.useQuery(
+    { limit: 3, householdMemberId: selectedMemberId },
+    { enabled: shouldQuery }
+  );
 
   // Fetch recent blood tests (filtered by selected member)
-  const { data: recentBloodTests } = trpc.bloodTest.getAll.useQuery({
-    householdMemberId: selectedMemberId,
-  });
+  const { data: recentBloodTests } = trpc.bloodTest.getAll.useQuery(
+    { householdMemberId: selectedMemberId },
+    { enabled: shouldQuery }
+  );
 
   // Fetch active medications/supplements count
   const { data: medCounts } = trpc.medications.getActiveCounts.useQuery();

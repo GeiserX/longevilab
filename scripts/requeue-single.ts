@@ -33,27 +33,17 @@ const failedJobs = [
 ];
 
 async function main() {
-  console.log("Re-queuing failed OCR jobs with fresh IDs...\n");
-
   for (const job of failedJobs) {
-    // Use a fresh job ID with timestamp
     const jobId = `ocr-${job.bloodTestId}-${Date.now()}`;
-
-    console.log(`Queuing OCR job for blood test ${job.bloodTestId}`);
-    console.log(`Job ID: ${jobId}`);
-
     await ocrQueue.add("process-pdf", job, { jobId });
-    console.log("  Queued successfully!\n");
-
-    // Small delay to ensure unique timestamps
     await new Promise((r) => setTimeout(r, 100));
   }
-
-  console.log("All jobs queued!");
 
   await ocrQueue.close();
   await redis.quit();
   process.exit(0);
 }
 
-main().catch(console.error);
+main().catch(() => {
+  process.exit(1);
+});

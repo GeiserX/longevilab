@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -14,9 +15,10 @@ import {
   ArrowUp01Icon,
   Moon02Icon,
   Sun03Icon,
-  BookOpen01Icon,
+  HeartCheckIcon,
   UserIcon,
   Tick01Icon,
+  ChartHistogramIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -46,7 +48,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 const navigation = [
   { name: "Home", href: "/home", icon: Home01Icon },
   { name: "Biomarkers", href: "/biomarkers", icon: TestTube02Icon },
-  { name: "Health Journal", href: "/journal", icon: BookOpen01Icon },
+  { name: "Health", href: "/journal", icon: HeartCheckIcon },
+  { name: "Insights", href: "/insights", icon: ChartHistogramIcon },
   { name: "Settings", href: "/settings", icon: Settings01Icon },
 ];
 
@@ -61,6 +64,16 @@ export function AppSidebar() {
   // Find the selected member or default to primary
   const selectedMember = members?.find((m) => m.id === selectedMemberId) ??
     members?.find((m) => m.isPrimary) ?? members?.[0];
+
+  // Auto-select primary member on initial load if no member is selected
+  useEffect(() => {
+    if (members && members.length > 0 && !selectedMemberId) {
+      const primaryMember = members.find((m) => m.isPrimary) ?? members[0];
+      if (primaryMember) {
+        setSelectedMemberId(primaryMember.id);
+      }
+    }
+  }, [members, selectedMemberId, setSelectedMemberId]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -201,7 +214,7 @@ export function AppSidebar() {
                               <span className="text-xs text-muted-foreground">(You)</span>
                             )}
                           </div>
-                          {selectedMember?.id === member.id && (
+                          {selectedMemberId === member.id && (
                             <HugeiconsIcon icon={Tick01Icon} className="h-4 w-4 text-primary" />
                           )}
                         </DropdownMenuItem>

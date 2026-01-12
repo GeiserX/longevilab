@@ -78,8 +78,6 @@ export async function extractTextFromPdf(pdfBuffer: Buffer, filename: string): P
     throw new Error("Failed to submit PDF for OCR processing");
   }
 
-  console.log(`[OCR] Submitted job ${submitResult.request_id}, polling for results with exponential backoff...`);
-
   // Poll for results with exponential backoff
   let attempts = 0;
   let consecutiveErrors = 0;
@@ -100,7 +98,6 @@ export async function extractTextFromPdf(pdfBuffer: Buffer, filename: string): P
       });
     } catch (fetchError) {
       consecutiveErrors++;
-      console.error(`[OCR] Network error on attempt ${attempts} (${consecutiveErrors} consecutive):`, fetchError);
 
       if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
         throw new Error(`OCR polling failed: ${MAX_CONSECUTIVE_ERRORS} consecutive network errors`);
@@ -110,11 +107,6 @@ export async function extractTextFromPdf(pdfBuffer: Buffer, filename: string): P
 
     if (!statusResponse.ok) {
       consecutiveErrors++;
-      const errorBody = await statusResponse.text().catch(() => "");
-      console.warn(
-        `[OCR] Poll attempt ${attempts} failed - HTTP ${statusResponse.status} (${consecutiveErrors} consecutive errors)`,
-        errorBody ? `Response: ${errorBody.substring(0, 200)}` : ""
-      );
 
       if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
         throw new Error(`OCR polling failed: ${MAX_CONSECUTIVE_ERRORS} consecutive HTTP errors (last: ${statusResponse.status})`);
@@ -128,29 +120,12 @@ export async function extractTextFromPdf(pdfBuffer: Buffer, filename: string): P
     let statusResult: DatalabStatusResponse;
     try {
       statusResult = (await statusResponse.json()) as DatalabStatusResponse;
-    } catch (parseError) {
-      console.error(`[OCR] Failed to parse response on attempt ${attempts}:`, parseError);
+    } catch {
       continue;
-    }
-
-    // Log detailed status for debugging
-    if (attempts % 10 === 0 || statusResult.status !== "processing") {
-      const waitTimeSec = Math.round(totalWaitTimeMs / 1000);
-      console.log(`[OCR] Attempt ${attempts} (${waitTimeSec}s elapsed) - Status: ${statusResult.status}`, {
-        requestId: submitResult.request_id,
-        status: statusResult.status,
-        success: statusResult.success,
-        pageCount: statusResult.page_count,
-        hasMarkdown: !!statusResult.markdown,
-        hasText: !!statusResult.text,
-        error: statusResult.error || undefined,
-      });
     }
 
     if (statusResult.status === "complete") {
       const text = statusResult.markdown || statusResult.text || "";
-      const waitTimeSec = Math.round(totalWaitTimeMs / 1000);
-      console.log(`[OCR] Completed after ${attempts} attempts (${waitTimeSec}s), extracted ${text.length} characters from ${statusResult.page_count || 1} pages`);
       return {
         text,
         pageCount: statusResult.page_count || 1,
@@ -158,11 +133,6 @@ export async function extractTextFromPdf(pdfBuffer: Buffer, filename: string): P
     }
 
     if (statusResult.status === "failed") {
-      console.error(`[OCR] Datalab.to reported failure:`, {
-        requestId: submitResult.request_id,
-        error: statusResult.error,
-        metadata: statusResult.metadata,
-      });
       throw new Error(`OCR processing failed: ${statusResult.error || "Unknown error from Datalab.to"}`);
     }
 

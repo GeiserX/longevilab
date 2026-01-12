@@ -486,15 +486,6 @@ export function calculatePhenoAgeExtended(
   const mortalityScore = calculateMortalityScore(xb);
   let phenoAge = mortalityScoreToPhenoAge(mortalityScore);
 
-  // Debug logging
-  console.log("[PhenoAge] Calculation intermediate values:", {
-    chronologicalAge,
-    xb,
-    mortalityScore,
-    phenoAge,
-    biomarkerValues: Object.fromEntries(convertedBiomarkers),
-  });
-
   if (isNaN(phenoAge)) {
     return {
       biologicalAge: null,

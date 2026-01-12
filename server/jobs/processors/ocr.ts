@@ -23,18 +23,14 @@ export async function processOcrJob(data: OcrJobData): Promise<void> {
       .where(eq(bloodTests.id, bloodTestId));
 
     // Download the PDF from storage
-    console.log(`[OCR] Downloading PDF from ${filePath}`);
     const pdfBuffer = await storage.download(filePath);
 
     // Process through OCR
-    console.log(`[OCR] Processing PDF (${pdfBuffer.length} bytes)`);
-    const { text, pageCount } = await extractTextFromPdf(pdfBuffer, filePath);
+    const { text } = await extractTextFromPdf(pdfBuffer, filePath);
 
     if (!text || text.trim().length === 0) {
       throw new Error("OCR returned empty text");
     }
-
-    console.log(`[OCR] Extracted ${text.length} characters from ${pageCount} pages`);
 
     // Save OCR text to database
     await db
@@ -46,12 +42,9 @@ export async function processOcrJob(data: OcrJobData): Promise<void> {
       .where(eq(bloodTests.id, bloodTestId));
 
     // Queue LLM extraction job
-    console.log(`[OCR] Queuing LLM extraction job for blood test ${bloodTestId}`);
     await queueLlmExtractionJob({ bloodTestId });
 
   } catch (error) {
-    console.error(`[OCR] Error processing blood test ${bloodTestId}:`, error);
-
     // Update status to failed
     await db
       .update(bloodTests)

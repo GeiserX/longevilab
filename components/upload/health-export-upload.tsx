@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -17,6 +17,7 @@ import { trpc } from "@/lib/trpc";
 import type { HealthImportProgress } from "@/server/db/schema/health-data-imports";
 
 interface HealthExportUploadProps {
+  householdMemberId?: string;
   onImportComplete?: () => void;
 }
 
@@ -26,33 +27,40 @@ const ALLOWED_TYPES = [
   "application/x-zip",
 ];
 
-export function HealthExportUpload({ onImportComplete }: HealthExportUploadProps) {
+export function HealthExportUpload({ householdMemberId, onImportComplete }: HealthExportUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [importId, setImportId] = useState<string | null>(null);
+  const [shouldPoll, setShouldPoll] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const hasNotifiedCompletion = useRef(false);
+
+  // Mutation to clear existing health data
+  const clearDataMutation = trpc.journal.clearAllHealthData.useMutation();
 
   // Poll for import progress when we have an importId
   const { data: importProgress, refetch: refetchProgress } =
     trpc.journal.getImportProgress.useQuery(
       { importId: importId! },
       {
-        enabled: !!importId,
-        refetchInterval: (query) => {
-          // Stop polling when completed or failed
-          const status = query.state.data?.status;
-          if (status === "completed" || status === "failed") {
-            return false;
-          }
-          return 2000; // Poll every 2 seconds
-        },
+        enabled: !!importId && shouldPoll,
+        refetchInterval: shouldPoll ? 2000 : false,
       }
     );
 
-  // Notify parent when import completes
+  // Stop polling when import completes or fails
   useEffect(() => {
-    if (importProgress?.status === "completed" && onImportComplete) {
+    if (importProgress?.status === "completed" || importProgress?.status === "failed") {
+      setShouldPoll(false);
+    }
+  }, [importProgress?.status]);
+
+  // Notify parent when import completes (only once per import)
+  useEffect(() => {
+    if (importProgress?.status === "completed" && onImportComplete && !hasNotifiedCompletion.current) {
+      hasNotifiedCompletion.current = true;
       onImportComplete();
     }
   }, [importProgress?.status, onImportComplete]);
@@ -104,6 +112,9 @@ export function HealthExportUpload({ onImportComplete }: HealthExportUploadProps
     try {
       const formData = new FormData();
       formData.append("file", file);
+      if (householdMemberId) {
+        formData.append("householdMemberId", householdMemberId);
+      }
 
       const response = await fetch("/api/upload/health-export", {
         method: "POST",
@@ -118,6 +129,8 @@ export function HealthExportUpload({ onImportComplete }: HealthExportUploadProps
 
       // Start polling for progress
       setImportId(data.importId);
+      setShouldPoll(true);
+      hasNotifiedCompletion.current = false;
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to upload file. Please try again."
@@ -131,12 +144,30 @@ export function HealthExportUpload({ onImportComplete }: HealthExportUploadProps
     setFile(null);
     setError("");
     setImportId(null);
+    setShouldPoll(false);
+    hasNotifiedCompletion.current = false;
   };
 
   const resetUpload = () => {
     setFile(null);
     setError("");
     setImportId(null);
+    setShouldPoll(false);
+    hasNotifiedCompletion.current = false;
+  };
+
+  const handleClearAndReimport = async () => {
+    setIsClearing(true);
+    setError("");
+    try {
+      await clearDataMutation.mutateAsync({ householdMemberId });
+      // Reset upload state after clearing
+      resetUpload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to clear data");
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   // Calculate progress percentage
@@ -232,40 +263,96 @@ export function HealthExportUpload({ onImportComplete }: HealthExportUploadProps
 
           {/* Results summary */}
           {importProgress.status === "completed" && importProgress.progress && (
-            <div className="grid grid-cols-3 gap-4">
-              <div className="p-4 rounded-lg bg-muted">
-                <p className="text-2xl font-bold text-foreground">
-                  {importProgress.progress.breakdown.weight.imported}
-                </p>
-                <p className="text-sm text-muted-foreground">Weight entries</p>
-                {importProgress.progress.breakdown.weight.skipped > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    ({importProgress.progress.breakdown.weight.skipped} skipped)
-                  </p>
+            <div className="space-y-4">
+              {/* Total summary */}
+              <div className="flex items-center justify-between p-4 rounded-lg bg-primary/5 border border-primary/10">
+                <span className="text-sm text-muted-foreground">Total records imported</span>
+                <span className="text-2xl font-bold text-foreground">
+                  {importProgress.progress.recordsImported}
+                </span>
+              </div>
+
+              {/* Breakdown grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {(importProgress.progress.breakdown.activity?.imported ?? 0) > 0 && (
+                  <div className="p-3 rounded-lg bg-muted">
+                    <p className="text-xl font-bold text-foreground">
+                      {importProgress.progress.breakdown.activity.imported}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Activity</p>
+                  </div>
+                )}
+                {(importProgress.progress.breakdown.heart_rate?.imported ?? 0) > 0 && (
+                  <div className="p-3 rounded-lg bg-muted">
+                    <p className="text-xl font-bold text-foreground">
+                      {importProgress.progress.breakdown.heart_rate.imported}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Heart Rate</p>
+                  </div>
+                )}
+                {(importProgress.progress.breakdown.sleep?.imported ?? 0) > 0 && (
+                  <div className="p-3 rounded-lg bg-muted">
+                    <p className="text-xl font-bold text-foreground">
+                      {importProgress.progress.breakdown.sleep.imported}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Sleep</p>
+                  </div>
+                )}
+                {(importProgress.progress.breakdown.weight?.imported ?? 0) > 0 && (
+                  <div className="p-3 rounded-lg bg-muted">
+                    <p className="text-xl font-bold text-foreground">
+                      {importProgress.progress.breakdown.weight.imported}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Weight</p>
+                  </div>
+                )}
+                {(importProgress.progress.breakdown.glucose?.imported ?? 0) > 0 && (
+                  <div className="p-3 rounded-lg bg-muted">
+                    <p className="text-xl font-bold text-foreground">
+                      {importProgress.progress.breakdown.glucose.imported}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Glucose</p>
+                  </div>
+                )}
+                {(importProgress.progress.breakdown.blood_pressure?.imported ?? 0) > 0 && (
+                  <div className="p-3 rounded-lg bg-muted">
+                    <p className="text-xl font-bold text-foreground">
+                      {importProgress.progress.breakdown.blood_pressure.imported}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Blood Pressure</p>
+                  </div>
+                )}
+                {(importProgress.progress.breakdown.blood_oxygen?.imported ?? 0) > 0 && (
+                  <div className="p-3 rounded-lg bg-muted">
+                    <p className="text-xl font-bold text-foreground">
+                      {importProgress.progress.breakdown.blood_oxygen.imported}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Blood Oxygen</p>
+                  </div>
+                )}
+                {(importProgress.progress.breakdown.vo2_max?.imported ?? 0) > 0 && (
+                  <div className="p-3 rounded-lg bg-muted">
+                    <p className="text-xl font-bold text-foreground">
+                      {importProgress.progress.breakdown.vo2_max.imported}
+                    </p>
+                    <p className="text-xs text-muted-foreground">VO2 Max</p>
+                  </div>
                 )}
               </div>
-              <div className="p-4 rounded-lg bg-muted">
-                <p className="text-2xl font-bold text-foreground">
-                  {importProgress.progress.breakdown.sleep.imported}
-                </p>
-                <p className="text-sm text-muted-foreground">Sleep entries</p>
-                {importProgress.progress.breakdown.sleep.skipped > 0 && (
+
+              {/* Skipped records summary */}
+              {importProgress.progress.recordsSkipped > 0 && (
+                <div className="text-center space-y-2">
                   <p className="text-xs text-muted-foreground">
-                    ({importProgress.progress.breakdown.sleep.skipped} skipped)
+                    {importProgress.progress.recordsSkipped} duplicate records skipped
                   </p>
-                )}
-              </div>
-              <div className="p-4 rounded-lg bg-muted">
-                <p className="text-2xl font-bold text-foreground">
-                  {importProgress.progress.breakdown.glucose.imported}
-                </p>
-                <p className="text-sm text-muted-foreground">Glucose entries</p>
-                {importProgress.progress.breakdown.glucose.skipped > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    ({importProgress.progress.breakdown.glucose.skipped} skipped)
-                  </p>
-                )}
-              </div>
+                  {importProgress.progress.recordsImported === 0 && importProgress.progress.recordsSkipped > 100 && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      All records already exist. To re-import with updated schema, clear existing data first.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -278,11 +365,25 @@ export function HealthExportUpload({ onImportComplete }: HealthExportUploadProps
 
           {/* Actions */}
           {!isProcessing && (
-            <Button onClick={resetUpload} variant="outline" className="w-full">
-              {importProgress.status === "completed"
-                ? "Import Another File"
-                : "Try Again"}
-            </Button>
+            <div className="space-y-2">
+              <Button onClick={resetUpload} variant="outline" className="w-full">
+                {importProgress.status === "completed"
+                  ? "Import Another File"
+                  : "Try Again"}
+              </Button>
+              {importProgress.status === "completed" &&
+                importProgress.progress?.recordsImported === 0 &&
+                (importProgress.progress?.recordsSkipped ?? 0) > 100 && (
+                <Button
+                  onClick={handleClearAndReimport}
+                  variant="destructive"
+                  className="w-full"
+                  disabled={isClearing}
+                >
+                  {isClearing ? "Clearing..." : "Clear Existing Data & Re-import"}
+                </Button>
+              )}
+            </div>
           )}
         </div>
       </Card>

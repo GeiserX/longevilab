@@ -9,10 +9,23 @@ import {
   TestTube02Icon,
   Delete02Icon,
   Edit02Icon,
+  Pulse01Icon,
+  Activity01Icon,
+  BloodPressureIcon,
+  BloodIcon,
+  Analytics01Icon,
 } from "@hugeicons/core-free-icons";
 import { format } from "date-fns";
 
-export type EntryType = "weight" | "sleep" | "glucose";
+export type EntryType =
+  | "weight"
+  | "sleep"
+  | "glucose"
+  | "heart_rate"
+  | "activity"
+  | "blood_pressure"
+  | "blood_oxygen"
+  | "vo2_max";
 
 interface JournalEntryCardProps {
   id: string;
@@ -41,6 +54,31 @@ const typeConfig: Record<EntryType, { icon: typeof WeightScale01Icon; color: str
     icon: TestTube02Icon,
     color: "bg-amber-500/10 text-amber-500",
     label: "Glucose",
+  },
+  heart_rate: {
+    icon: Pulse01Icon,
+    color: "bg-red-500/10 text-red-500",
+    label: "Heart Rate",
+  },
+  activity: {
+    icon: Activity01Icon,
+    color: "bg-green-500/10 text-green-500",
+    label: "Activity",
+  },
+  blood_pressure: {
+    icon: BloodPressureIcon,
+    color: "bg-pink-500/10 text-pink-500",
+    label: "Blood Pressure",
+  },
+  blood_oxygen: {
+    icon: BloodIcon,
+    color: "bg-cyan-500/10 text-cyan-500",
+    label: "Blood Oxygen",
+  },
+  vo2_max: {
+    icon: Analytics01Icon,
+    color: "bg-orange-500/10 text-orange-500",
+    label: "VO2 Max",
   },
 };
 

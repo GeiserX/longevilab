@@ -3,8 +3,8 @@
  * Handles ZIP extraction, XML parsing, and database insertion.
  */
 
-import { createReadStream, existsSync, rmSync } from "fs";
-import { mkdir, rm } from "fs/promises";
+import { createReadStream, createWriteStream, existsSync, rmSync } from "fs";
+import { mkdir } from "fs/promises";
 import { join, dirname } from "path";
 import unzipper from "unzipper";
 import { db } from "@/server/db";
@@ -14,6 +14,12 @@ import {
   weightEntries,
   sleepEntries,
   glucoseEntries,
+  heartRateEntries,
+  hourlyHeartRateEntries,
+  activityEntries,
+  bloodPressureEntries,
+  bloodOxygenEntries,
+  vo2MaxEntries,
   HealthImportProgress,
 } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
@@ -28,6 +34,19 @@ import { redis } from "@/server/jobs/queue";
 
 // Batch size for database insertions
 const BATCH_SIZE = 100;
+
+// Type for import counts
+interface ImportCounts {
+  weight: number;
+  sleep: number;
+  glucose: number;
+  heart_rate: number;
+  hourly_heart_rate: number;
+  activity: number;
+  blood_pressure: number;
+  blood_oxygen: number;
+  vo2_max: number;
+}
 
 /**
  * Update import status in database
@@ -101,9 +120,7 @@ async function extractHealthExportXml(
           const targetPath = join(extractDir, "export.xml");
           xmlPath = targetPath;
 
-          entry.pipe(
-            require("fs").createWriteStream(targetPath)
-          );
+          entry.pipe(createWriteStream(targetPath));
         } else {
           // Skip other files
           entry.autodrain();
@@ -132,13 +149,24 @@ async function extractHealthExportXml(
 async function importRecordsToDatabase(
   importId: string,
   userId: string,
+  householdMemberId: string | undefined,
   records: ParsedHealthRecord[],
   onProgress: (progress: HealthImportProgress) => void
 ): Promise<{
-  imported: { weight: number; sleep: number; glucose: number };
+  imported: ImportCounts;
   failed: number;
 }> {
-  const imported = { weight: 0, sleep: 0, glucose: 0 };
+  const imported: ImportCounts = {
+    weight: 0,
+    sleep: 0,
+    glucose: 0,
+    heart_rate: 0,
+    hourly_heart_rate: 0,
+    activity: 0,
+    blood_pressure: 0,
+    blood_oxygen: 0,
+    vo2_max: 0,
+  };
   let failed = 0;
 
   for (let i = 0; i < records.length; i += BATCH_SIZE) {
@@ -147,12 +175,35 @@ async function importRecordsToDatabase(
     await db.transaction(async (tx) => {
       for (const record of batch) {
         try {
-          // Create base journal entry
+          // Handle hourly heart rate separately - it doesn't use journal entries
+          if (record.type === "hourly_heart_rate") {
+            const hrData = record.subType ? JSON.parse(record.subType) : {};
+
+            await tx.insert(hourlyHeartRateEntries).values({
+              userId,
+              householdMemberId,
+              recordedAt: new Date(`${record.date}T${String(hrData.hour).padStart(2, "0")}:00:00`),
+              entryDate: record.date,
+              hour: hrData.hour,
+              avgHeartRate: Math.round(record.value),
+              minHeartRate: hrData.min ?? null,
+              maxHeartRate: hrData.max ?? null,
+              readingCount: hrData.count ?? 1,
+              source: "apple_health",
+              importId,
+            });
+
+            imported.hourly_heart_rate++;
+            continue; // Skip journal entry creation
+          }
+
+          // Create base journal entry (for all types except hourly_heart_rate)
           const [journalEntry] = await tx
             .insert(healthJournalEntries)
             .values({
               userId,
-              entryType: record.type,
+              householdMemberId,
+              entryType: record.type as "weight" | "sleep" | "glucose" | "heart_rate" | "activity" | "blood_pressure" | "blood_oxygen" | "vo2_max",
               entryDate: record.date,
               source: "apple_health",
               importId,
@@ -163,17 +214,52 @@ async function importRecordsToDatabase(
           if (record.type === "weight") {
             const weightKg = convertWeightToKg(record.value, record.originalUnit);
 
+            // Parse body fat percentage from subType if available
+            let bodyFatPercentage: string | null = null;
+            if (record.subType) {
+              try {
+                const weightData = JSON.parse(record.subType);
+                if (weightData.bodyFatPercentage !== undefined && weightData.bodyFatPercentage !== null) {
+                  bodyFatPercentage = weightData.bodyFatPercentage.toFixed(2);
+                }
+              } catch (e) {
+                // Ignore parsing errors
+              }
+            }
+
             await tx.insert(weightEntries).values({
               journalEntryId: journalEntry.id,
               weight: weightKg.toFixed(2),
+              bodyFatPercentage,
             });
 
             imported.weight++;
           } else if (record.type === "sleep") {
+            // Parse sleep stage data from subType if available
+            let sleepStageData: {
+              timeInBedMinutes?: number;
+              awakeMinutes?: number;
+              remMinutes?: number;
+              coreMinutes?: number;
+              deepMinutes?: number;
+            } = {};
+            if (record.subType) {
+              try {
+                sleepStageData = JSON.parse(record.subType);
+              } catch (e) {
+                // Ignore parsing errors
+              }
+            }
+
             await tx.insert(sleepEntries).values({
               journalEntryId: journalEntry.id,
               durationMinutes: Math.round(record.value),
               quality: 3, // Default to "Good" since Apple Health doesn't track subjective quality
+              timeInBedMinutes: sleepStageData.timeInBedMinutes ?? null,
+              awakeMinutes: sleepStageData.awakeMinutes ?? null,
+              remMinutes: sleepStageData.remMinutes ?? null,
+              coreMinutes: sleepStageData.coreMinutes ?? null,
+              deepMinutes: sleepStageData.deepMinutes ?? null,
             });
 
             imported.sleep++;
@@ -190,12 +276,61 @@ async function importRecordsToDatabase(
             });
 
             imported.glucose++;
+          } else if (record.type === "heart_rate") {
+            // Parse heart rate data from subType JSON
+            const hrData = record.subType ? JSON.parse(record.subType) : {};
+
+            await tx.insert(heartRateEntries).values({
+              journalEntryId: journalEntry.id,
+              restingHeartRate: hrData.restingHR ?? null,
+              heartRateVariability: hrData.hrv?.toFixed(2) ?? null,
+              walkingHeartRate: hrData.walkingHR ?? null,
+            });
+
+            imported.heart_rate++;
+          } else if (record.type === "activity") {
+            // Parse activity data from subType JSON
+            const activityData = record.subType ? JSON.parse(record.subType) : {};
+
+            await tx.insert(activityEntries).values({
+              journalEntryId: journalEntry.id,
+              steps: activityData.steps ?? null,
+              distance: activityData.distance?.toFixed(3) ?? null,
+              activeCalories: activityData.activeCalories ?? null,
+              exerciseMinutes: activityData.exerciseMinutes ?? null,
+              standHours: activityData.standHours ?? null,
+              flightsClimbed: activityData.flightsClimbed ?? null,
+            });
+
+            imported.activity++;
+          } else if (record.type === "blood_pressure") {
+            // Parse blood pressure data from subType JSON
+            const bpData = record.subType ? JSON.parse(record.subType) : {};
+
+            await tx.insert(bloodPressureEntries).values({
+              journalEntryId: journalEntry.id,
+              systolic: bpData.systolic,
+              diastolic: bpData.diastolic,
+              measuredAt: record.timestamp ?? null,
+            });
+
+            imported.blood_pressure++;
+          } else if (record.type === "blood_oxygen") {
+            await tx.insert(bloodOxygenEntries).values({
+              journalEntryId: journalEntry.id,
+              percentage: record.value.toFixed(2),
+            });
+
+            imported.blood_oxygen++;
+          } else if (record.type === "vo2_max") {
+            await tx.insert(vo2MaxEntries).values({
+              journalEntryId: journalEntry.id,
+              value: record.value.toFixed(2),
+            });
+
+            imported.vo2_max++;
           }
-        } catch (error) {
-          console.error(
-            `Failed to import record ${record.type}:${record.date}:`,
-            error
-          );
+        } catch {
           failed++;
         }
       }
@@ -203,17 +338,25 @@ async function importRecordsToDatabase(
 
     // Update progress after each batch
     const currentRecord = Math.min(i + BATCH_SIZE, records.length);
+    const totalImported = Object.values(imported).reduce((a, b) => a + b, 0);
+
     onProgress({
       phase: "importing",
       currentRecord,
       totalRecords: records.length,
-      recordsImported: imported.weight + imported.sleep + imported.glucose,
+      recordsImported: totalImported,
       recordsSkipped: 0, // Already filtered
       recordsFailed: failed,
       breakdown: {
         weight: { imported: imported.weight, skipped: 0 },
         sleep: { imported: imported.sleep, skipped: 0 },
         glucose: { imported: imported.glucose, skipped: 0 },
+        heart_rate: { imported: imported.heart_rate, skipped: 0 },
+        hourly_heart_rate: { imported: imported.hourly_heart_rate, skipped: 0 },
+        activity: { imported: imported.activity, skipped: 0 },
+        blood_pressure: { imported: imported.blood_pressure, skipped: 0 },
+        blood_oxygen: { imported: imported.blood_oxygen, skipped: 0 },
+        vo2_max: { imported: imported.vo2_max, skipped: 0 },
       },
     });
   }
@@ -226,12 +369,17 @@ async function importRecordsToDatabase(
  */
 async function cleanupTempFiles(zipPath: string, importId: string) {
   try {
+    // Clean up the extracted directory
     const extractDir = join(dirname(zipPath), `health-export-${importId}`);
     if (existsSync(extractDir)) {
       rmSync(extractDir, { recursive: true, force: true });
     }
-  } catch (error) {
-    console.error("Failed to clean up temp files:", error);
+
+    // Clean up the original zip file
+    if (existsSync(zipPath)) {
+      rmSync(zipPath, { force: true });
+    }
+  } catch {
     // Don't throw - cleanup failure shouldn't fail the import
   }
 }
@@ -245,9 +393,34 @@ async function rollbackPartialImport(importId: string) {
     await db
       .delete(healthJournalEntries)
       .where(eq(healthJournalEntries.importId, importId));
-  } catch (error) {
-    console.error("Failed to rollback partial import:", error);
+  } catch {
+    // Ignore rollback errors
   }
+}
+
+/**
+ * Create empty progress with all types initialized
+ */
+function createEmptyProgress(phase: "extracting" | "parsing" | "importing"): HealthImportProgress {
+  return {
+    phase,
+    currentRecord: 0,
+    totalRecords: 0,
+    recordsImported: 0,
+    recordsSkipped: 0,
+    recordsFailed: 0,
+    breakdown: {
+      weight: { imported: 0, skipped: 0 },
+      sleep: { imported: 0, skipped: 0 },
+      glucose: { imported: 0, skipped: 0 },
+      heart_rate: { imported: 0, skipped: 0 },
+      hourly_heart_rate: { imported: 0, skipped: 0 },
+      activity: { imported: 0, skipped: 0 },
+      blood_pressure: { imported: 0, skipped: 0 },
+      blood_oxygen: { imported: 0, skipped: 0 },
+      vo2_max: { imported: 0, skipped: 0 },
+    },
+  };
 }
 
 /**
@@ -257,6 +430,7 @@ export async function processHealthExport(
   importId: string,
   filePath: string,
   userId: string,
+  householdMemberId: string | undefined,
   importFromDate: string
 ): Promise<void> {
   const fromDate = new Date(importFromDate);
@@ -264,14 +438,11 @@ export async function processHealthExport(
   try {
     // Phase 1: Extract ZIP
     await updateImportStatus(importId, "extracting");
-    console.log(`[HealthExport] Extracting ZIP file for import ${importId}`);
 
     const xmlPath = await extractHealthExportXml(filePath, importId);
-    console.log(`[HealthExport] XML extracted to ${xmlPath}`);
 
     // Phase 2: Parse XML
     await updateImportStatus(importId, "parsing");
-    console.log(`[HealthExport] Parsing XML for import ${importId}`);
 
     let lastProgressUpdate = 0;
     const records = await parseHealthExportXml(xmlPath, {
@@ -281,58 +452,39 @@ export async function processHealthExport(
         const now = Date.now();
         if (now - lastProgressUpdate > 5000) {
           lastProgressUpdate = now;
-          updateImportStatus(importId, "parsing", {
-            phase: "parsing",
-            currentRecord: recordsProcessed,
-            totalRecords: 0, // Unknown until complete
-            recordsImported: 0,
-            recordsSkipped: 0,
-            recordsFailed: 0,
-            breakdown: {
-              weight: { imported: 0, skipped: 0 },
-              sleep: { imported: 0, skipped: 0 },
-              glucose: { imported: 0, skipped: 0 },
-            },
-          });
+          const progress = createEmptyProgress("parsing");
+          progress.currentRecord = recordsProcessed;
+          updateImportStatus(importId, "parsing", progress);
         }
       },
     });
 
-    console.log(
-      `[HealthExport] Parsed ${records.length} records for import ${importId}`
-    );
-
     // Deduplicate records within the import
     const dedupedRecords = deduplicateRecords(records);
-    console.log(
-      `[HealthExport] Deduplicated to ${dedupedRecords.length} records`
-    );
 
     // Phase 3: Filter duplicates against existing data
     const existingKeys = await getExistingEntryKeys(userId);
+
     const { recordsToImport, skippedCount, skippedByType } = filterDuplicates(
       dedupedRecords,
       existingKeys
     );
 
-    console.log(
-      `[HealthExport] ${recordsToImport.length} new records to import, ${skippedCount} duplicates skipped`
-    );
-
     // Phase 4: Import to database
-    await updateImportStatus(importId, "importing", {
-      phase: "importing",
-      currentRecord: 0,
-      totalRecords: recordsToImport.length,
-      recordsImported: 0,
-      recordsSkipped: skippedCount,
-      recordsFailed: 0,
-      breakdown: {
-        weight: { imported: 0, skipped: skippedByType.weight },
-        sleep: { imported: 0, skipped: skippedByType.sleep },
-        glucose: { imported: 0, skipped: skippedByType.glucose },
-      },
-    });
+    const importingProgress = createEmptyProgress("importing");
+    importingProgress.totalRecords = recordsToImport.length;
+    importingProgress.recordsSkipped = skippedCount;
+    importingProgress.breakdown.weight.skipped = skippedByType.weight;
+    importingProgress.breakdown.sleep.skipped = skippedByType.sleep;
+    importingProgress.breakdown.glucose.skipped = skippedByType.glucose;
+    importingProgress.breakdown.heart_rate.skipped = skippedByType.heart_rate;
+    importingProgress.breakdown.hourly_heart_rate.skipped = skippedByType.hourly_heart_rate || 0;
+    importingProgress.breakdown.activity.skipped = skippedByType.activity;
+    importingProgress.breakdown.blood_pressure.skipped = skippedByType.blood_pressure;
+    importingProgress.breakdown.blood_oxygen.skipped = skippedByType.blood_oxygen;
+    importingProgress.breakdown.vo2_max.skipped = skippedByType.vo2_max;
+
+    await updateImportStatus(importId, "importing", importingProgress);
 
     const progressCallback = async (progress: HealthImportProgress) => {
       // Add skipped counts to progress
@@ -340,6 +492,12 @@ export async function processHealthExport(
       progress.breakdown.weight.skipped = skippedByType.weight;
       progress.breakdown.sleep.skipped = skippedByType.sleep;
       progress.breakdown.glucose.skipped = skippedByType.glucose;
+      progress.breakdown.heart_rate.skipped = skippedByType.heart_rate;
+      progress.breakdown.hourly_heart_rate.skipped = skippedByType.hourly_heart_rate || 0;
+      progress.breakdown.activity.skipped = skippedByType.activity;
+      progress.breakdown.blood_pressure.skipped = skippedByType.blood_pressure;
+      progress.breakdown.blood_oxygen.skipped = skippedByType.blood_oxygen;
+      progress.breakdown.vo2_max.skipped = skippedByType.vo2_max;
 
       await updateImportStatus(importId, "importing", progress);
     };
@@ -347,34 +505,38 @@ export async function processHealthExport(
     const { imported, failed } = await importRecordsToDatabase(
       importId,
       userId,
+      householdMemberId,
       recordsToImport,
       progressCallback
     );
 
-    // Mark as completed
-    await updateImportStatus(importId, "completed", {
-      phase: "importing",
-      currentRecord: recordsToImport.length,
-      totalRecords: recordsToImport.length,
-      recordsImported: imported.weight + imported.sleep + imported.glucose,
-      recordsSkipped: skippedCount,
-      recordsFailed: failed,
-      breakdown: {
-        weight: { imported: imported.weight, skipped: skippedByType.weight },
-        sleep: { imported: imported.sleep, skipped: skippedByType.sleep },
-        glucose: { imported: imported.glucose, skipped: skippedByType.glucose },
-      },
-    });
+    // Calculate total imported
+    const totalImported = Object.values(imported).reduce((a, b) => a + b, 0);
 
-    console.log(
-      `[HealthExport] Import ${importId} completed. Imported: ${imported.weight + imported.sleep + imported.glucose}, Skipped: ${skippedCount}, Failed: ${failed}`
-    );
+    // Mark as completed
+    const completedProgress = createEmptyProgress("importing");
+    completedProgress.currentRecord = recordsToImport.length;
+    completedProgress.totalRecords = recordsToImport.length;
+    completedProgress.recordsImported = totalImported;
+    completedProgress.recordsSkipped = skippedCount;
+    completedProgress.recordsFailed = failed;
+    completedProgress.breakdown = {
+      weight: { imported: imported.weight, skipped: skippedByType.weight },
+      sleep: { imported: imported.sleep, skipped: skippedByType.sleep },
+      glucose: { imported: imported.glucose, skipped: skippedByType.glucose },
+      heart_rate: { imported: imported.heart_rate, skipped: skippedByType.heart_rate },
+      hourly_heart_rate: { imported: imported.hourly_heart_rate, skipped: skippedByType.hourly_heart_rate || 0 },
+      activity: { imported: imported.activity, skipped: skippedByType.activity },
+      blood_pressure: { imported: imported.blood_pressure, skipped: skippedByType.blood_pressure },
+      blood_oxygen: { imported: imported.blood_oxygen, skipped: skippedByType.blood_oxygen },
+      vo2_max: { imported: imported.vo2_max, skipped: skippedByType.vo2_max },
+    };
+
+    await updateImportStatus(importId, "completed", completedProgress);
 
     // Cleanup
     await cleanupTempFiles(filePath, importId);
   } catch (error) {
-    console.error(`[HealthExport] Import ${importId} failed:`, error);
-
     // Rollback any partial imports
     await rollbackPartialImport(importId);
 

@@ -10,6 +10,12 @@ import {
   weightEntries,
   sleepEntries,
   glucoseEntries,
+  heartRateEntries,
+  hourlyHeartRateEntries,
+  activityEntries,
+  bloodPressureEntries,
+  bloodOxygenEntries,
+  vo2MaxEntries,
   medications,
   supplements,
 } from "./health-journal";
@@ -20,6 +26,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),
   bloodTests: many(bloodTests),
   healthJournalEntries: many(healthJournalEntries),
+  hourlyHeartRateEntries: many(hourlyHeartRateEntries),
   medications: many(medications),
   supplements: many(supplements),
   households: many(households),
@@ -101,9 +108,42 @@ export const healthJournalEntriesRelations = relations(
       fields: [healthJournalEntries.userId],
       references: [users.id],
     }),
-    weightEntry: one(weightEntries),
-    sleepEntry: one(sleepEntries),
-    glucoseEntry: one(glucoseEntries),
+    householdMember: one(householdMembers, {
+      fields: [healthJournalEntries.householdMemberId],
+      references: [householdMembers.id],
+    }),
+    weightEntry: one(weightEntries, {
+      fields: [healthJournalEntries.id],
+      references: [weightEntries.journalEntryId],
+    }),
+    sleepEntry: one(sleepEntries, {
+      fields: [healthJournalEntries.id],
+      references: [sleepEntries.journalEntryId],
+    }),
+    glucoseEntry: one(glucoseEntries, {
+      fields: [healthJournalEntries.id],
+      references: [glucoseEntries.journalEntryId],
+    }),
+    heartRateEntry: one(heartRateEntries, {
+      fields: [healthJournalEntries.id],
+      references: [heartRateEntries.journalEntryId],
+    }),
+    activityEntry: one(activityEntries, {
+      fields: [healthJournalEntries.id],
+      references: [activityEntries.journalEntryId],
+    }),
+    bloodPressureEntry: one(bloodPressureEntries, {
+      fields: [healthJournalEntries.id],
+      references: [bloodPressureEntries.journalEntryId],
+    }),
+    bloodOxygenEntry: one(bloodOxygenEntries, {
+      fields: [healthJournalEntries.id],
+      references: [bloodOxygenEntries.journalEntryId],
+    }),
+    vo2MaxEntry: one(vo2MaxEntries, {
+      fields: [healthJournalEntries.id],
+      references: [vo2MaxEntries.journalEntryId],
+    }),
     import: one(healthDataImports, {
       fields: [healthJournalEntries.importId],
       references: [healthDataImports.id],
@@ -128,6 +168,41 @@ export const sleepEntriesRelations = relations(sleepEntries, ({ one }) => ({
 export const glucoseEntriesRelations = relations(glucoseEntries, ({ one }) => ({
   journalEntry: one(healthJournalEntries, {
     fields: [glucoseEntries.journalEntryId],
+    references: [healthJournalEntries.id],
+  }),
+}));
+
+export const heartRateEntriesRelations = relations(heartRateEntries, ({ one }) => ({
+  journalEntry: one(healthJournalEntries, {
+    fields: [heartRateEntries.journalEntryId],
+    references: [healthJournalEntries.id],
+  }),
+}));
+
+export const activityEntriesRelations = relations(activityEntries, ({ one }) => ({
+  journalEntry: one(healthJournalEntries, {
+    fields: [activityEntries.journalEntryId],
+    references: [healthJournalEntries.id],
+  }),
+}));
+
+export const bloodPressureEntriesRelations = relations(bloodPressureEntries, ({ one }) => ({
+  journalEntry: one(healthJournalEntries, {
+    fields: [bloodPressureEntries.journalEntryId],
+    references: [healthJournalEntries.id],
+  }),
+}));
+
+export const bloodOxygenEntriesRelations = relations(bloodOxygenEntries, ({ one }) => ({
+  journalEntry: one(healthJournalEntries, {
+    fields: [bloodOxygenEntries.journalEntryId],
+    references: [healthJournalEntries.id],
+  }),
+}));
+
+export const vo2MaxEntriesRelations = relations(vo2MaxEntries, ({ one }) => ({
+  journalEntry: one(healthJournalEntries, {
+    fields: [vo2MaxEntries.journalEntryId],
     references: [healthJournalEntries.id],
   }),
 }));
@@ -175,6 +250,29 @@ export const healthDataImportsRelations = relations(
       fields: [healthDataImports.userId],
       references: [users.id],
     }),
+    householdMember: one(householdMembers, {
+      fields: [healthDataImports.householdMemberId],
+      references: [householdMembers.id],
+    }),
     journalEntries: many(healthJournalEntries),
+  })
+);
+
+// Hourly Heart Rate Relations
+export const hourlyHeartRateEntriesRelations = relations(
+  hourlyHeartRateEntries,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [hourlyHeartRateEntries.userId],
+      references: [users.id],
+    }),
+    householdMember: one(householdMembers, {
+      fields: [hourlyHeartRateEntries.householdMemberId],
+      references: [householdMembers.id],
+    }),
+    import: one(healthDataImports, {
+      fields: [hourlyHeartRateEntries.importId],
+      references: [healthDataImports.id],
+    }),
   })
 );

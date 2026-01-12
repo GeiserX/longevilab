@@ -13,24 +13,18 @@ async function seed() {
 
   const db = drizzle(pool);
 
-  console.log("Seeding biomarkers...");
-
   // Insert biomarkers
-  const insertedBiomarkers = await db
+  await db
     .insert(biomarkers)
     .values(biomarkersData)
     .onConflictDoNothing()
     .returning();
-
-  console.log(`Inserted ${insertedBiomarkers.length} biomarkers`);
 
   // Create a map of biomarker codes to IDs
   const allBiomarkers = await db.select().from(biomarkers);
   const biomarkerMap = new Map(allBiomarkers.map((b) => [b.code, b.id]));
 
   // Insert reference ranges
-  console.log("Seeding reference ranges...");
-
   const referenceRangeValues = referenceRangesData.map((range) => ({
     biomarkerId: biomarkerMap.get(range.code)!,
     minAge: 0,
@@ -41,22 +35,17 @@ async function seed() {
     unit: range.unit,
   }));
 
-  const insertedRanges = await db
+  await db
     .insert(referenceRanges)
     .values(referenceRangeValues)
     .onConflictDoNothing()
     .returning();
 
-  console.log(`Inserted ${insertedRanges.length} reference ranges`);
-
   // Insert biomarker education content
-  console.log("Seeding biomarker education content...");
-
   const educationValues = biomarkerEducationData
     .map((edu) => {
       const biomarkerId = biomarkerMap.get(edu.code);
       if (!biomarkerId) {
-        console.warn(`Biomarker not found for education content: ${edu.code}`);
         return null;
       }
       return {
@@ -71,19 +60,15 @@ async function seed() {
     })
     .filter((v): v is NonNullable<typeof v> => v !== null);
 
-  const insertedEducation = await db
+  await db
     .insert(biomarkerEducation)
     .values(educationValues)
     .onConflictDoNothing()
     .returning();
 
-  console.log(`Inserted ${insertedEducation.length} education entries`);
-
   await pool.end();
-  console.log("Seed completed!");
 }
 
-seed().catch((error) => {
-  console.error("Seed failed:", error);
+seed().catch(() => {
   process.exit(1);
 });

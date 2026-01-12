@@ -1,0 +1,29 @@
+# Worker Dockerfile - for background job processing
+FROM node:20-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@10 --activate
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 worker
+
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+
+# Install all dependencies (including dev for tsx)
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Create uploads directory with proper permissions
+RUN mkdir -p /app/uploads && chown -R worker:nodejs /app/uploads
+
+USER worker
+
+CMD ["pnpm", "worker"]

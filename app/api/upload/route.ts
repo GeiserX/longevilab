@@ -57,7 +57,6 @@ export async function POST(request: NextRequest) {
 
     // Upload to storage
     const storedPath = await storage.upload(buffer, file.name);
-    console.log(`[Upload] File stored at: ${storedPath}`);
 
     // Create blood test record
     const testDate = new Date().toISOString().split("T")[0]; // Default to today, will be updated by LLM
@@ -72,15 +71,11 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
-    console.log(`[Upload] Created blood test record: ${bloodTest.id}`);
-
     // Queue OCR processing job
     await queueOcrJob({
       bloodTestId: bloodTest.id,
       filePath: storedPath,
     });
-
-    console.log(`[Upload] Queued OCR job for blood test: ${bloodTest.id}`);
 
     return NextResponse.json({
       success: true,
@@ -88,8 +83,7 @@ export async function POST(request: NextRequest) {
       message: "File uploaded and processing started",
     });
 
-  } catch (error) {
-    console.error("[Upload] Error:", error);
+  } catch {
     return NextResponse.json(
       { error: "Failed to upload file" },
       { status: 500 }

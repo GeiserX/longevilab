@@ -436,31 +436,6 @@ function findMatchingUnit(
 }
 
 /**
- * Convert a value from canonical unit to target unit
- */
-export function convertFromCanonical(
-  value: number,
-  biomarkerCode: string,
-  targetUnit: string
-): { value: number; unit: string } | null {
-  const conversion = unitConversions[biomarkerCode];
-  if (!conversion) {
-    return null;
-  }
-
-  const matchedUnit = findMatchingUnit(targetUnit, conversion.conversions);
-  if (!matchedUnit) {
-    return null;
-  }
-
-  const factor = conversion.conversions[matchedUnit].factor;
-  return {
-    value: value * factor,
-    unit: matchedUnit,
-  };
-}
-
-/**
  * Convert a value from source unit to canonical unit
  */
 export function convertToCanonical(
@@ -624,30 +599,6 @@ export function isOutOfRange(
   }
 
   return false;
-}
-
-/**
- * Get the display unit for a biomarker based on user preference
- */
-export function getDisplayUnit(
-  biomarkerCode: string,
-  preferredSystem: "metric" | "us" | "imperial"
-): string | null {
-  const conversion = unitConversions[biomarkerCode];
-  if (!conversion) return null;
-
-  // US typically uses mg/dL for many values
-  if (preferredSystem === "us") {
-    const usUnits = ["mg/dL", "g/dL", "ng/mL", "pg/mL", "ng/dL"];
-    for (const unit of usUnits) {
-      if (conversion.conversions[unit]) {
-        return unit;
-      }
-    }
-  }
-
-  // Metric/SI is the canonical unit
-  return conversion.canonicalUnit;
 }
 
 /**

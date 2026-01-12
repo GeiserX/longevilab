@@ -370,7 +370,6 @@ Be direct and informative. Do not use phrases like "I'd recommend" or "Let me ex
           historicalCount: historicalResults.length,
         };
       } catch (error) {
-        console.error("AI generation error:", error);
         throw new Error(
           `Failed to generate insights: ${error instanceof Error ? error.message : "Unknown error"}`
         );

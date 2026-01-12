@@ -87,12 +87,6 @@ export const biologicalAgeRouter = createTRPCRouter({
       },
     });
 
-    console.log("[BioAge] Found", allTests.length, "blood tests");
-    if (allTests.length > 0) {
-      console.log("[BioAge] Latest test has", allTests[0].results.length, "results");
-      console.log("[BioAge] Latest test biomarker codes:", allTests[0].results.map(r => r.biomarker?.code).join(", "));
-    }
-
     if (allTests.length === 0 || allTests[0].results.length === 0) {
       return {
         biologicalAge: null,
@@ -158,28 +152,12 @@ export const biologicalAgeRouter = createTRPCRouter({
       unit: data.unit,
     }));
 
-    // Debug: log what biomarkers we have
-    const phenoAgeBiomarkersFound = PHENOAGE_BIOMARKER_CODES.filter(
-      code => biomarkerMap.has(code) || (code === "CRP" && biomarkerMap.has("HSCRP"))
-    );
-    console.log("[BioAge] PhenoAge biomarkers found:", phenoAgeBiomarkersFound);
-    console.log("[BioAge] All biomarkers available:", Array.from(biomarkerMap.keys()));
-    console.log("[BioAge] Biomarker values:", biomarkerValues.map(b => `${b.code}=${b.value}`));
-
     // Calculate PhenoAge with sex-stratified imputation
     // Note: Using minMeasuredForImputation: 0 to always allow calculation with imputation
     const result = calculatePhenoAgeExtended(chronologicalAge, biomarkerValues, {
       sex,
       useImputation: true,
       minMeasuredForImputation: 0, // Changed from 3 to 0 to always allow calculation
-    });
-
-    console.log("[BioAge] PhenoAge result:", {
-      biologicalAge: result.biologicalAge,
-      confidence: result.confidence,
-      missingBiomarkers: result.missingBiomarkers,
-      imputedBiomarkers: result.imputedBiomarkers,
-      usedImputation: result.usedImputation,
     });
 
     // Round to integers

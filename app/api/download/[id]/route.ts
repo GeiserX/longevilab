@@ -90,8 +90,7 @@ export async function GET(
         "Content-Length": fileBuffer.length.toString(),
       },
     });
-  } catch (error) {
-    console.error("Download error:", error);
+  } catch {
     return NextResponse.json(
       { error: "Failed to download file" },
       { status: 500 }

@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
+import { useSelectedMember } from "@/contexts/selected-member-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { HealthExportUpload } from "@/components/upload/health-export-upload";
 import {
   Sheet,
   SheetBody,
@@ -31,6 +33,7 @@ import {
   TestTube02Icon,
   Medicine01Icon,
   ArrowLeft02Icon,
+  SmartPhone01Icon,
 } from "@hugeicons/core-free-icons";
 import { format, isWithinInterval, parseISO } from "date-fns";
 import {
@@ -47,11 +50,12 @@ import {
   type EntryType,
 } from "@/components/journal";
 
-type AddStep = "select" | "weight" | "sleep" | "glucose" | "medication" | "supplement";
+type AddStep = "select" | "weight" | "sleep" | "glucose" | "medication" | "supplement" | "import";
 
 export default function JournalPage() {
   const searchParams = useSearchParams();
   const initialType = (searchParams.get("type") as JournalEntryType) || "all";
+  const { selectedMemberId } = useSelectedMember();
 
   const [selectedType, setSelectedType] = useState<JournalEntryType>(initialType);
   const [activeTab, setActiveTab] = useState<string>(initialType === "medications" ? "medications" : "entries");
@@ -62,16 +66,27 @@ export default function JournalPage() {
   const [deleteEntry, setDeleteEntry] = useState<string | null>(null);
   const [showInactiveMeds, setShowInactiveMeds] = useState(false);
 
-  // Fetch journal entries
+  // Wait for member selection before querying
+  const shouldQuery = !!selectedMemberId;
+
+  // Fetch journal entries (filtered by selected household member)
   const { data: journalEntries, isLoading: entriesLoading } = trpc.journal.getAll.useQuery({
     type: selectedType === "all" || selectedType === "medications" ? undefined : selectedType,
-  });
+    householdMemberId: selectedMemberId,
+  }, { enabled: shouldQuery });
 
   // Fetch medications and supplements
   const { data: medicationsData, isLoading: medsLoading } = trpc.medications.getAllMedications.useQuery({});
   const { data: supplementsData, isLoading: suppsLoading } = trpc.medications.getAllSupplements.useQuery({});
 
   const utils = trpc.useUtils();
+
+  const handleImportComplete = () => {
+    // Refresh journal data after import
+    utils.journal.getAll.invalidate();
+    utils.journal.getLatestByType.invalidate();
+    utils.journal.getWeeklyStats.invalidate();
+  };
 
   const deleteEntryMutation = trpc.journal.delete.useMutation({
     onSuccess: () => {
@@ -131,7 +146,13 @@ export default function JournalPage() {
 
   const getEntryValue = (entry: NonNullable<typeof journalEntries>[0]): { value: string; unit: string; subtext?: string } => {
     if (entry.entryType === "weight" && entry.weightEntry) {
-      return { value: entry.weightEntry.weight, unit: "kg" };
+      return {
+        value: entry.weightEntry.weight,
+        unit: "kg",
+        subtext: entry.weightEntry.bodyFatPercentage
+          ? `Body fat: ${Number(entry.weightEntry.bodyFatPercentage).toFixed(1)}%`
+          : undefined,
+      };
     }
     if (entry.entryType === "sleep" && entry.sleepEntry) {
       const hours = entry.sleepEntry.durationMinutes / 60;
@@ -153,10 +174,68 @@ export default function JournalPage() {
         subtext: readingLabels[entry.glucoseEntry.readingType] || entry.glucoseEntry.readingType,
       };
     }
+    if (entry.entryType === "heart_rate" && entry.heartRateEntry) {
+      const hr = entry.heartRateEntry;
+      // Show resting HR as primary, with HRV as subtext
+      if (hr.restingHeartRate) {
+        return {
+          value: hr.restingHeartRate.toString(),
+          unit: "bpm",
+          subtext: hr.heartRateVariability ? `HRV: ${Number(hr.heartRateVariability).toFixed(0)}ms` : undefined,
+        };
+      }
+      // If no resting HR, show HRV
+      if (hr.heartRateVariability) {
+        return { value: Number(hr.heartRateVariability).toFixed(0), unit: "ms HRV" };
+      }
+      return { value: "—", unit: "" };
+    }
+    if (entry.entryType === "activity" && entry.activityEntry) {
+      const act = entry.activityEntry;
+      // Show steps as primary metric
+      if (act.steps) {
+        const subtexts = [];
+        if (act.activeCalories) subtexts.push(`${act.activeCalories} kcal`);
+        if (act.exerciseMinutes) subtexts.push(`${act.exerciseMinutes} min`);
+        return {
+          value: act.steps.toLocaleString(),
+          unit: "steps",
+          subtext: subtexts.length > 0 ? subtexts.join(", ") : undefined,
+        };
+      }
+      // Fallback to calories or exercise minutes
+      if (act.activeCalories) {
+        return { value: act.activeCalories.toString(), unit: "kcal" };
+      }
+      if (act.exerciseMinutes) {
+        return { value: act.exerciseMinutes.toString(), unit: "min exercise" };
+      }
+      return { value: "—", unit: "" };
+    }
+    if (entry.entryType === "blood_pressure" && entry.bloodPressureEntry) {
+      const bp = entry.bloodPressureEntry;
+      return {
+        value: `${bp.systolic}/${bp.diastolic}`,
+        unit: "mmHg",
+        subtext: bp.pulse ? `Pulse: ${bp.pulse} bpm` : undefined,
+      };
+    }
+    if (entry.entryType === "blood_oxygen" && entry.bloodOxygenEntry) {
+      return {
+        value: Number(entry.bloodOxygenEntry.percentage).toFixed(0),
+        unit: "% SpO2",
+      };
+    }
+    if (entry.entryType === "vo2_max" && entry.vo2MaxEntry) {
+      return {
+        value: Number(entry.vo2MaxEntry.value).toFixed(1),
+        unit: "mL/kg/min",
+      };
+    }
     return { value: "—", unit: "" };
   };
 
-  const isLoading = entriesLoading || medsLoading || suppsLoading;
+  const isLoading = !shouldQuery || entriesLoading || medsLoading || suppsLoading;
 
   const entryTypeButtons = [
     { step: "weight" as const, icon: WeightScale01Icon, label: "Weight", color: "bg-blue-500/10 text-blue-500" },
@@ -283,6 +362,7 @@ export default function JournalPage() {
             />
           )}
         </TabsContent>
+
       </Tabs>
 
       {/* Add Entry Sheet */}
@@ -309,19 +389,30 @@ export default function JournalPage() {
 
           <SheetBody>
             {addStep === "select" && (
-              <div className="grid grid-cols-2 gap-3">
-                {entryTypeButtons.map((btn) => (
-                  <button
-                    key={btn.step}
-                    onClick={() => setAddStep(btn.step)}
-                    className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:border-primary/50 hover:bg-muted/50 transition-colors"
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  {entryTypeButtons.map((btn) => (
+                    <button
+                      key={btn.step}
+                      onClick={() => setAddStep(btn.step)}
+                      className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className={`p-3 rounded-lg ${btn.color}`}>
+                        <HugeiconsIcon icon={btn.icon} className="h-6 w-6" />
+                      </div>
+                      <span className="text-sm font-medium">{btn.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="pt-2 border-t">
+                  <Button
+                    onClick={() => setAddStep("import")}
+                    className="w-full"
                   >
-                    <div className={`p-3 rounded-lg ${btn.color}`}>
-                      <HugeiconsIcon icon={btn.icon} className="h-6 w-6" />
-                    </div>
-                    <span className="text-sm font-medium">{btn.label}</span>
-                  </button>
-                ))}
+                    <HugeiconsIcon icon={SmartPhone01Icon} className="mr-2 h-4 w-4" />
+                    Import from iPhone Health
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -339,6 +430,17 @@ export default function JournalPage() {
             )}
             {addStep === "supplement" && (
               <SupplementForm onSuccess={handleAddSuccess} onCancel={() => setAddStep("select")} />
+            )}
+            {addStep === "import" && (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Import activity, heart rate, sleep, weight, blood pressure, and more from your iPhone Health app.
+                </p>
+                <HealthExportUpload
+                  householdMemberId={selectedMemberId}
+                  onImportComplete={handleImportComplete}
+                />
+              </div>
             )}
           </SheetBody>
         </SheetContent>

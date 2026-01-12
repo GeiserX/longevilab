@@ -31,6 +31,7 @@ export interface HealthExportJobData {
   importId: string;
   filePath: string;
   userId: string;
+  householdMemberId?: string;
   importFromDate: string; // ISO date string
 }
 

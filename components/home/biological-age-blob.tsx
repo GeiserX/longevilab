@@ -107,7 +107,7 @@ export function BiologicalAgeBlob({
         {/* Main blob with transparency */}
         <div
           ref={blobRef}
-          className={`relative w-[280px] h-[280px] rounded-blob bg-gradient-to-br ${colorClass} shadow-xl overflow-hidden opacity-90`}
+          className={`relative w-[280px] h-[280px] rounded-blob bg-gradient-to-br ${colorClass} shadow-xl opacity-90`}
           style={{
             borderRadius: "60% 40% 30% 70% / 60% 30% 70% 40%",
             animation: "morphBlob 8s ease-in-out infinite",

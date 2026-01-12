@@ -111,11 +111,7 @@ export function validateExtractedBiomarkers(
   knownCodes: string[]
 ): ExtractedBiomarker[] {
   return extracted.filter((biomarker) => {
-    const isValid = knownCodes.includes(biomarker.code);
-    if (!isValid) {
-      console.warn(`[LLM] Skipping unknown biomarker code: ${biomarker.code}`);
-    }
-    return isValid;
+    return knownCodes.includes(biomarker.code);
   });
 }
 
@@ -172,25 +168,20 @@ Be precise with conversion factors - they must be medically accurate.`,
     });
 
     if (!object.canConvert) {
-      console.log(`[LLM-Unit] Cannot convert ${sourceUnit} to ${canonicalUnit} for ${biomarkerCode}`);
       return null;
     }
 
     if (object.isEquivalent) {
-      // Units are equivalent, just use the canonical unit notation
-      console.log(`[LLM-Unit] ${biomarkerCode}: "${sourceUnit}" is equivalent to "${canonicalUnit}"`);
       return { convertedValue: value, unit: canonicalUnit };
     }
 
     if (object.conversionFactor) {
       const convertedValue = value / object.conversionFactor;
-      console.log(`[LLM-Unit] ${biomarkerCode}: ${value} ${sourceUnit} → ${convertedValue} ${canonicalUnit} (factor: ${object.conversionFactor})`);
       return { convertedValue, unit: canonicalUnit };
     }
 
     return null;
-  } catch (error) {
-    console.error(`[LLM-Unit] Error converting unit for ${biomarkerCode}:`, error);
+  } catch {
     return null;
   }
 }

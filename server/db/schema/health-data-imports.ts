@@ -8,6 +8,7 @@ import {
   jsonb,
 } from "drizzle-orm/pg-core";
 import { users } from "./users";
+import { householdMembers } from "./households";
 
 // Import status enum
 export const healthImportStatusEnum = pgEnum("health_import_status", [
@@ -31,6 +32,12 @@ export interface HealthImportProgress {
     weight: { imported: number; skipped: number };
     sleep: { imported: number; skipped: number };
     glucose: { imported: number; skipped: number };
+    heart_rate: { imported: number; skipped: number };
+    hourly_heart_rate: { imported: number; skipped: number };
+    activity: { imported: number; skipped: number };
+    blood_pressure: { imported: number; skipped: number };
+    blood_oxygen: { imported: number; skipped: number };
+    vo2_max: { imported: number; skipped: number };
   };
 }
 
@@ -40,6 +47,10 @@ export const healthDataImports = pgTable("health_data_imports", {
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  householdMemberId: uuid("household_member_id").references(
+    () => householdMembers.id,
+    { onDelete: "set null" }
+  ),
 
   // File info
   originalFileName: text("original_file_name").notNull(),

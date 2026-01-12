@@ -39,3 +39,19 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# turbo
+.turbo/
+
+# IDE
+.idea/
+.vscode/settings.json
+.vscode/launch.json
+
+# editor swap files
+*.swp
+*.swo
+*~
+
+# uploads (local storage)
+/uploads/

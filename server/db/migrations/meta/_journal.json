@@ -22,6 +22,20 @@
       "when": 1768160856963,
       "tag": "0002_exotic_thing",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1768164711272,
+      "tag": "0003_daffy_freak",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1768203111211,
+      "tag": "0004_volatile_gunslinger",
+      "breakpoints": true
     }
   ]
 }

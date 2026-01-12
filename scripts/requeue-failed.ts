@@ -16,16 +16,12 @@ const failedJobs = [
 ];
 
 async function main() {
-  console.log("Re-queuing failed jobs...");
-
   for (const job of failedJobs) {
-    console.log(`Queuing OCR job for blood test ${job.bloodTestId}`);
     await queueOcrJob(job);
-    console.log(`  Queued successfully`);
   }
-
-  console.log("Done! Jobs will be processed by the worker.");
   process.exit(0);
 }
 
-main().catch(console.error);
+main().catch(() => {
+  process.exit(1);
+});

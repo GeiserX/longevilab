@@ -7,11 +7,19 @@ import type { AppRouter } from "@/server/trpc/root";
 
 export const trpc = createTRPCReact<AppRouter>();
 
+// Get base URL dynamically at runtime
+function getBaseURL(): string {
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+}
+
 export function getTRPCClient() {
   return trpc.createClient({
     links: [
       httpBatchLink({
-        url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/trpc`,
+        url: `${getBaseURL()}/api/trpc`,
         transformer: superjson,
       }),
     ],

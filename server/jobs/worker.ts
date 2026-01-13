@@ -27,7 +27,14 @@ const HEALTH_EXPORT_CONCURRENCY = parseInt(
 const ocrWorker = new Worker<OcrJobData>(
   QUEUE_NAMES.OCR,
   async (job: Job<OcrJobData>) => {
-    await processOcrJob(job.data);
+    console.log(`[OCR] Processing job ${job.id} for blood test ${job.data.bloodTestId}`);
+    try {
+      await processOcrJob(job.data);
+      console.log(`[OCR] Completed job ${job.id}`);
+    } catch (error) {
+      console.error(`[OCR] Error processing job ${job.id}:`, error);
+      throw error;
+    }
   },
   {
     connection,
@@ -42,7 +49,14 @@ const ocrWorker = new Worker<OcrJobData>(
 const llmWorker = new Worker<LlmExtractionJobData>(
   QUEUE_NAMES.LLM_EXTRACTION,
   async (job: Job<LlmExtractionJobData>) => {
-    await processLlmExtractionJob(job.data);
+    console.log(`[LLM] Processing job ${job.id} for blood test ${job.data.bloodTestId}`);
+    try {
+      await processLlmExtractionJob(job.data);
+      console.log(`[LLM] Completed job ${job.id}`);
+    } catch (error) {
+      console.error(`[LLM] Error processing job ${job.id}:`, error);
+      throw error;
+    }
   },
   {
     connection,
@@ -54,7 +68,14 @@ const llmWorker = new Worker<LlmExtractionJobData>(
 const healthExportWorker = new Worker<HealthExportJobData>(
   QUEUE_NAMES.HEALTH_EXPORT,
   async (job: Job<HealthExportJobData>) => {
-    await processHealthExportJob(job.data);
+    console.log(`[Health Export] Processing job ${job.id} for import ${job.data.importId}`);
+    try {
+      await processHealthExportJob(job.data);
+      console.log(`[Health Export] Completed job ${job.id}`);
+    } catch (error) {
+      console.error(`[Health Export] Error processing job ${job.id}:`, error);
+      throw error;
+    }
   },
   {
     connection,
@@ -64,6 +85,13 @@ const healthExportWorker = new Worker<HealthExportJobData>(
     lockRenewTime: 60000, // Renew lock every 60 seconds
   }
 );
+
+// Log worker startup
+console.log("🚀 Workers started:");
+console.log(`  - OCR: ${OCR_CONCURRENCY} concurrent jobs`);
+console.log(`  - LLM: ${LLM_CONCURRENCY} concurrent jobs`);
+console.log(`  - Health Export: ${HEALTH_EXPORT_CONCURRENCY} concurrent jobs`);
+console.log(`  - Redis: ${process.env.REDIS_URL || "redis://localhost:6379"}`);
 
 // Graceful shutdown
 async function shutdown() {

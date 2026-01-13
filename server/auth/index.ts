@@ -21,6 +21,13 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,
+    requireEmailVerification: false, // Explicitly disable email verification
+  },
+
+  // Explicitly disable email verification to prevent SMTP issues
+  emailVerification: {
+    sendOnSignUp: false, // Don't send verification emails on signup
+    sendOnSignIn: false, // Don't send verification emails on signin
   },
 
   session: {

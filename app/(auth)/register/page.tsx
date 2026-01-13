@@ -38,11 +38,28 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const result = await signUp.email({
+      console.log("Starting sign-up...", {
+        baseURL: process.env.NEXT_PUBLIC_APP_URL,
+        email,
+      });
+
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Request timeout after 15 seconds. Check your network connection and server logs.")), 15000)
+      );
+
+      const signUpPromise = signUp.email({
         email,
         password,
         name,
       });
+
+      const result = await Promise.race([
+        signUpPromise,
+        timeoutPromise,
+      ]) as Awaited<ReturnType<typeof signUp.email>>;
+
+      console.log("Sign-up result:", result);
 
       if (result.error) {
         setError(result.error.message || "Failed to create account");
@@ -51,9 +68,15 @@ export default function RegisterPage() {
       }
 
       // Redirect to onboarding after successful registration
+      setLoading(false);
       router.push("/onboarding");
-    } catch {
-      setError("An error occurred. Please try again.");
+    } catch (err) {
+      console.error("Sign up error:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "An error occurred. Please check your connection and try again."
+      );
       setLoading(false);
     }
   };

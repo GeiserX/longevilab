@@ -31,7 +31,7 @@ Two images, both pushed to Docker Hub via GHA:
 Deployed on **geiserback** via Portainer GitOps.
 
 - Compose: `giteaer/geiserback` -> `longevilab/docker-compose.yml`
-- App URL: `http://geiserback.mango-alpha.ts.net:3100`
+- App URL: `http://geiserback.mango-alpha.ts.net:3250`
 - Postgres: sidecar (not shared with other services)
 - Redis: sidecar
 - Uploads: `/mnt/user/appdata/longevilab/uploads/`

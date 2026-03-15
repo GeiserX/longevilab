@@ -104,7 +104,7 @@ export async function processLlmExtractionJob(data: LlmExtractionJobData): Promi
     await db
       .update(bloodTests)
       .set({
-        status: "review",
+        status: "completed",
         testDate: extractionResult.testDate || bloodTest.testDate,
         labName: extractionResult.labName || bloodTest.labName,
         updatedAt: new Date(),

@@ -36,6 +36,13 @@
       "when": 1768203111211,
       "tag": "0004_volatile_gunslinger",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1773601107821,
+      "tag": "0005_previous_gambit",
+      "breakpoints": true
     }
   ]
 }

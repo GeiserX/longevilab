@@ -29,6 +29,7 @@ export function MedicationForm({ onSuccess, onCancel }: MedicationFormProps) {
   const [frequency, setFrequency] = useState<Frequency>("daily");
   const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
+  const [website, setWebsite] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
@@ -57,6 +58,7 @@ export function MedicationForm({ onSuccess, onCancel }: MedicationFormProps) {
       frequency,
       startDate,
       notes: notes || undefined,
+      website: website || undefined,
     });
   };
 
@@ -126,6 +128,18 @@ export function MedicationForm({ onSuccess, onCancel }: MedicationFormProps) {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
+          />
+        </FieldContent>
+      </Field>
+
+      <Field>
+        <FieldLabel>Website (optional)</FieldLabel>
+        <FieldContent>
+          <Input
+            type="url"
+            placeholder="https://..."
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
           />
         </FieldContent>
       </Field>

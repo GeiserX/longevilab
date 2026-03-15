@@ -15,11 +15,11 @@ export function LandingCta() {
       transition={{ duration: 1, delay: 1.8 }}
     >
       <div className="flex flex-row gap-4 md:gap-5">
-        <Link href="/register">
+        <Link href="/login">
           <Button
             className="bg-white text-stone-950 hover:bg-white/90 h-12 md:h-14 px-6 md:px-8 text-base md:text-lg"
           >
-            Get started
+            Log in
           </Button>
         </Link>
         <Link href="/docs" target="_blank">

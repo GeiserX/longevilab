@@ -5,6 +5,13 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Install OCR dependencies (Tesseract + poppler for pdftoppm)
+RUN apk add --no-cache \
+  tesseract-ocr \
+  tesseract-ocr-data-eng \
+  tesseract-ocr-data-spa \
+  poppler-utils
+
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@10 --activate
 

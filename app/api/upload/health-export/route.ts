@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const householdMemberId = formData.get("householdMemberId") as string | null;
+    const allData = formData.get("allData") === "true";
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -67,10 +68,11 @@ export async function POST(request: NextRequest) {
     // Upload to storage
     const storedPath = await storage.upload(buffer, file.name);
 
-    // Calculate date range (last 1 year)
+    // Calculate date range
     const now = new Date();
-    const oneYearAgo = new Date(now);
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    const importFromDate = allData
+      ? new Date("2000-01-01")
+      : new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
 
     // Create import tracking record
     const [importRecord] = await db
@@ -82,7 +84,7 @@ export async function POST(request: NextRequest) {
         storedFilePath: storedPath,
         fileSizeBytes: file.size,
         status: "pending",
-        importFromDate: oneYearAgo,
+        importFromDate,
         importToDate: now,
       })
       .returning();
@@ -93,7 +95,7 @@ export async function POST(request: NextRequest) {
       filePath: storedPath,
       userId: session.user.id,
       householdMemberId: householdMemberId || undefined,
-      importFromDate: oneYearAgo.toISOString(),
+      importFromDate: importFromDate.toISOString(),
     });
 
     return NextResponse.json({

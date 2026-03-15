@@ -13,7 +13,7 @@ Self-hosted blood work tracker with PDF OCR extraction, LLM-powered biomarker pa
 - **Queue**: BullMQ + Redis 7
 - **Auth**: Better Auth (self-hosted)
 - **API**: tRPC (end-to-end type safety)
-- **OCR**: Datalab.to API
+- **OCR**: Local Tesseract (default) or Datalab.to API (if key set)
 - **LLM**: Vercel AI SDK (OpenAI, Anthropic, or Ollama)
 - **UI**: shadcn/ui + Tailwind CSS v4
 
@@ -44,13 +44,14 @@ Deployed on **geiserback** via Portainer GitOps.
 | `REDIS_URL` | Yes | Redis connection string |
 | `BETTER_AUTH_SECRET` | Yes | Auth secret (32+ chars) |
 | `BETTER_AUTH_URL` | Yes | App URL for auth callbacks |
-| `DATALAB_API_KEY` | Yes* | Datalab.to OCR key |
+| `DATALAB_API_KEY` | No | Datalab.to OCR key (uses local Tesseract if empty) |
+| `TESSERACT_LANGS` | No | Tesseract languages (default: `eng+spa`) |
 | `LLM_PROVIDER` | No | `openai`, `anthropic`, or `ollama` |
 | `OLLAMA_BASE_URL` | No | Ollama endpoint (if using Ollama) |
 | `OPENAI_API_KEY` | No | OpenAI key (if using OpenAI) |
 | `ANTHROPIC_API_KEY` | No | Anthropic key (if using Anthropic) |
 
-*PDF extraction won't work without Datalab.to key.
+*Local Tesseract OCR is used by default. Set DATALAB_API_KEY for higher-quality cloud OCR.
 
 ## Development
 

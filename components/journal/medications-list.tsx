@@ -34,6 +34,7 @@ type Medication = {
   endDate: string | null;
   isActive: boolean;
   notes: string | null;
+  website: string | null;
 };
 
 type Supplement = {
@@ -45,6 +46,7 @@ type Supplement = {
   endDate: string | null;
   isActive: boolean;
   notes: string | null;
+  website: string | null;
 };
 
 interface MedicationsListProps {
@@ -128,7 +130,11 @@ export function MedicationsList({ medications, supplements, showInactive = false
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold">{med.name}</span>
+                          {med.website ? (
+                            <a href={med.website} target="_blank" rel="noopener noreferrer" className="font-semibold hover:underline text-primary">{med.name}</a>
+                          ) : (
+                            <span className="font-semibold">{med.name}</span>
+                          )}
                           {!med.isActive && (
                             <Badge variant="secondary" className="text-xs">Inactive</Badge>
                           )}
@@ -188,7 +194,11 @@ export function MedicationsList({ medications, supplements, showInactive = false
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold">{supp.name}</span>
+                          {supp.website ? (
+                            <a href={supp.website} target="_blank" rel="noopener noreferrer" className="font-semibold hover:underline text-primary">{supp.name}</a>
+                          ) : (
+                            <span className="font-semibold">{supp.name}</span>
+                          )}
                           {!supp.isActive && (
                             <Badge variant="secondary" className="text-xs">Inactive</Badge>
                           )}

@@ -12,6 +12,7 @@ const createMedicationSchema = z.object({
   startDate: z.string(),
   endDate: z.string().optional(),
   notes: z.string().optional(),
+  website: z.string().max(500).optional(),
 });
 
 const createSupplementSchema = z.object({
@@ -21,6 +22,7 @@ const createSupplementSchema = z.object({
   startDate: z.string(),
   endDate: z.string().optional(),
   notes: z.string().optional(),
+  website: z.string().max(500).optional(),
 });
 
 const updateSchema = z.object({
@@ -31,6 +33,7 @@ const updateSchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().nullable().optional(),
   notes: z.string().optional(),
+  website: z.string().max(500).nullable().optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -122,6 +125,7 @@ export const medicationsRouter = createTRPCRouter({
           startDate: input.startDate,
           endDate: input.endDate,
           notes: input.notes,
+          website: input.website,
           isActive: true,
         })
         .returning();
@@ -143,6 +147,7 @@ export const medicationsRouter = createTRPCRouter({
           startDate: input.startDate,
           endDate: input.endDate,
           notes: input.notes,
+          website: input.website,
           isActive: true,
         })
         .returning();

@@ -112,10 +112,12 @@ async function extractHealthExportXml(
       .on("entry", async (entry) => {
         const fileName = entry.path;
 
-        // Look for export.xml or Export.xml in any directory
+        // Look for export.xml, Export.xml, or exportación.xml in any directory
         if (
           fileName.endsWith("export.xml") ||
-          fileName.endsWith("Export.xml")
+          fileName.endsWith("Export.xml") ||
+          fileName.endsWith("exportación.xml") ||
+          fileName.endsWith("Exportación.xml")
         ) {
           const targetPath = join(extractDir, "export.xml");
           xmlPath = targetPath;

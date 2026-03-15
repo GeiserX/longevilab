@@ -110,7 +110,7 @@ async function extractHealthExportXml(
     createReadStream(zipPath)
       .pipe(unzipper.Parse())
       .on("entry", async (entry) => {
-        const fileName = entry.path;
+        const fileName = entry.path.normalize("NFC");
 
         // Look for export.xml, Export.xml, or exportación.xml in any directory
         if (

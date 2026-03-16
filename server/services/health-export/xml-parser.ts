@@ -572,6 +572,10 @@ export function deduplicateRecords(
     if (record.type === "blood_pressure" && record.timestamp) {
       // For blood pressure, keep all readings (unique by timestamp)
       key = `${record.type}:${record.date}:${record.timestamp.getTime()}`;
+    } else if (record.type === "hourly_heart_rate" && record.subType) {
+      // For hourly heart rate, keep per-hour granularity
+      const hrData = JSON.parse(record.subType);
+      key = `${record.type}:${record.date}:${hrData.hour}`;
     } else {
       // For other types, keep the latest reading of the day
       key = `${record.type}:${record.date}`;

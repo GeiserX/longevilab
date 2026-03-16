@@ -5,6 +5,18 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { medications, supplements } from "../../db/schema";
 
 // Input validation schemas
+const safeUrl = z.string().max(500).refine(
+  (val) => {
+    try {
+      const url = new URL(val);
+      return url.protocol === "https:" || url.protocol === "http:";
+    } catch {
+      return false;
+    }
+  },
+  { message: "Must be a valid http or https URL" }
+);
+
 const createMedicationSchema = z.object({
   name: z.string().min(1).max(255),
   dosage: z.string().max(100).optional(),
@@ -12,7 +24,7 @@ const createMedicationSchema = z.object({
   startDate: z.string(),
   endDate: z.string().optional(),
   notes: z.string().optional(),
-  website: z.string().max(500).optional(),
+  website: safeUrl.optional(),
 });
 
 const createSupplementSchema = z.object({
@@ -22,7 +34,7 @@ const createSupplementSchema = z.object({
   startDate: z.string(),
   endDate: z.string().optional(),
   notes: z.string().optional(),
-  website: z.string().max(500).optional(),
+  website: safeUrl.optional(),
 });
 
 const updateSchema = z.object({
@@ -33,7 +45,7 @@ const updateSchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().nullable().optional(),
   notes: z.string().optional(),
-  website: z.string().max(500).nullable().optional(),
+  website: safeUrl.nullable().optional(),
   isActive: z.boolean().optional(),
 });
 

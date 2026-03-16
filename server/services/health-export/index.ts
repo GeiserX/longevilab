@@ -464,8 +464,8 @@ export async function processHealthExport(
     // Deduplicate records within the import
     const dedupedRecords = deduplicateRecords(records);
 
-    // Phase 3: Filter duplicates against existing data
-    const existingKeys = await getExistingEntryKeys(userId);
+    // Phase 3: Filter duplicates against existing data (scoped to household member)
+    const existingKeys = await getExistingEntryKeys(userId, householdMemberId);
 
     const { recordsToImport, skippedCount, skippedByType } = filterDuplicates(
       dedupedRecords,

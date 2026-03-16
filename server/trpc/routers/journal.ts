@@ -1087,7 +1087,7 @@ export const journalRouter = createTRPCRouter({
       return dataPoints;
     }),
 
-  // Clear all health journal data for re-import
+  // Clear Apple Health imported data for re-import (does NOT touch manual entries)
   clearAllHealthData: protectedProcedure
     .input(
       z.object({
@@ -1095,35 +1095,39 @@ export const journalRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Delete from all related tables
+      // Only delete entries with source = "apple_health", never manual entries
       const baseCondition = eq(healthJournalEntries.userId, ctx.user.id);
       const memberCondition = input.householdMemberId
         ? eq(healthJournalEntries.householdMemberId, input.householdMemberId)
         : isNull(healthJournalEntries.householdMemberId);
+      const sourceCondition = eq(healthJournalEntries.source, "apple_health");
 
-      // Get all journal entry IDs for this user/member
+      // Get journal entry IDs for Apple Health imports only
       const entries = await ctx.db.query.healthJournalEntries.findMany({
-        where: and(baseCondition, memberCondition),
+        where: and(baseCondition, memberCondition, sourceCondition),
         columns: { id: true },
       });
 
       const entryIds = entries.map((e) => e.id);
 
       if (entryIds.length === 0) {
-        return { deleted: 0 };
+        // Still clean up hourly HR and import records even if no journal entries
+      } else {
+        // Delete from specific entry tables first (foreign key constraints)
+        await ctx.db.delete(weightEntries).where(sql`${weightEntries.journalEntryId} IN ${entryIds}`);
+        await ctx.db.delete(sleepEntries).where(sql`${sleepEntries.journalEntryId} IN ${entryIds}`);
+        await ctx.db.delete(glucoseEntries).where(sql`${glucoseEntries.journalEntryId} IN ${entryIds}`);
+        await ctx.db.delete(heartRateEntries).where(sql`${heartRateEntries.journalEntryId} IN ${entryIds}`);
+        await ctx.db.delete(activityEntries).where(sql`${activityEntries.journalEntryId} IN ${entryIds}`);
+        await ctx.db.delete(bloodPressureEntries).where(sql`${bloodPressureEntries.journalEntryId} IN ${entryIds}`);
+        await ctx.db.delete(bloodOxygenEntries).where(sql`${bloodOxygenEntries.journalEntryId} IN ${entryIds}`);
+        await ctx.db.delete(vo2MaxEntries).where(sql`${vo2MaxEntries.journalEntryId} IN ${entryIds}`);
+
+        // Delete from main journal entries table (Apple Health only)
+        await ctx.db.delete(healthJournalEntries).where(and(baseCondition, memberCondition, sourceCondition));
       }
 
-      // Delete from specific entry tables first (foreign key constraints)
-      await ctx.db.delete(weightEntries).where(sql`${weightEntries.journalEntryId} IN ${entryIds}`);
-      await ctx.db.delete(sleepEntries).where(sql`${sleepEntries.journalEntryId} IN ${entryIds}`);
-      await ctx.db.delete(glucoseEntries).where(sql`${glucoseEntries.journalEntryId} IN ${entryIds}`);
-      await ctx.db.delete(heartRateEntries).where(sql`${heartRateEntries.journalEntryId} IN ${entryIds}`);
-      await ctx.db.delete(activityEntries).where(sql`${activityEntries.journalEntryId} IN ${entryIds}`);
-      await ctx.db.delete(bloodPressureEntries).where(sql`${bloodPressureEntries.journalEntryId} IN ${entryIds}`);
-      await ctx.db.delete(bloodOxygenEntries).where(sql`${bloodOxygenEntries.journalEntryId} IN ${entryIds}`);
-      await ctx.db.delete(vo2MaxEntries).where(sql`${vo2MaxEntries.journalEntryId} IN ${entryIds}`);
-
-      // Delete from hourly heart rate table
+      // Delete from hourly heart rate table (always source=apple_health)
       const hourlyCondition = input.householdMemberId
         ? and(
             eq(hourlyHeartRateEntries.userId, ctx.user.id),
@@ -1134,9 +1138,6 @@ export const journalRouter = createTRPCRouter({
             isNull(hourlyHeartRateEntries.householdMemberId)
           );
       await ctx.db.delete(hourlyHeartRateEntries).where(hourlyCondition);
-
-      // Delete from main journal entries table
-      await ctx.db.delete(healthJournalEntries).where(and(baseCondition, memberCondition));
 
       // Delete import records
       const importCondition = input.householdMemberId

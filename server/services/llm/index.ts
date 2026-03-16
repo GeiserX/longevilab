@@ -62,10 +62,10 @@ const BIOMARKER_ALIASES: [string[], string][] = [
   [["eosinofilos", "eosinophils", "eosin"], "EOS"],
   [["basofilos", "basophils", "baso"], "BASO"],
 
-  // Lipids
-  [["colesterol total", "total cholesterol", "cholesterol", "colesterol"], "TC"],
+  // Lipids — LDL/HDL must come BEFORE TC to avoid "cholesterol" in "LDL cholesterol" matching TC first
   [["colesterol ldl", "ldl colesterol", "ldl-c", "ldl cholesterol", "ldl", "c-ldl", "colesterol-ldl"], "LDL"],
   [["colesterol hdl", "hdl colesterol", "hdl-c", "hdl cholesterol", "hdl", "c-hdl", "colesterol-hdl"], "HDL"],
+  [["colesterol total", "total cholesterol", "cholesterol", "colesterol"], "TC"],
   [["trigliceridos", "triglycerides", "trigs", "tg"], "TG"],
   [["colesterol vldl", "vldl", "vldl cholesterol"], "VLDL"],
   [["col.total/col.hdl", "indice aterogenico", "riesgo aterogenico", "col total/hdl"], "TC_HDL_RATIO"],
@@ -172,8 +172,9 @@ function normalize(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 }
 
-// Matches: optional </> + number (with , or . decimal) + whitespace + unit
-const VALUE_UNIT_RE = /[<>]?\s*(\d+[.,]?\d*)\s+([\w^µμ/*%.·×\-³⁹]+(?:\/[\w^µμ/*%.·×\-³⁹]+)?)/;
+// Matches: optional </> + number (with , or . decimal) + optional whitespace + unit
+// Whitespace between number and unit is optional to handle OCR outputs like "43.1%" or "5.4%"
+const VALUE_UNIT_RE = /[<>]?\s*(\d+[.,]?\d*)\s*([\w^µμ/*%.·×\-³⁹]+(?:\/[\w^µμ/*%.·×\-³⁹]+)?)/;
 
 function regexExtract(ocrText: string): ExtractionResult {
   const lines = ocrText.split(/\n/);
@@ -182,9 +183,11 @@ function regexExtract(ocrText: string): ExtractionResult {
 
   for (const line of lines) {
     const nLine = normalize(line);
+    let lineMatched = false;
 
     for (const [aliases, code] of BIOMARKER_ALIASES) {
       if (found.has(code)) continue;
+      if (lineMatched) break; // One biomarker per line to avoid alias collisions
 
       for (const alias of aliases) {
         const nAlias = normalize(alias);
@@ -212,6 +215,7 @@ function regexExtract(ocrText: string): ExtractionResult {
             originalName: alias,
           });
           found.add(code);
+          lineMatched = true;
           break;
         }
       }

@@ -5,7 +5,7 @@
 
 import { db } from "@/server/db";
 import { healthJournalEntries, bloodPressureEntries, hourlyHeartRateEntries } from "@/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { ParsedHealthRecord } from "./data-mapper";
 
 // Type alias for entry type values (including hourly_heart_rate for tracking)
@@ -25,9 +25,13 @@ type EntryType =
  * Returns a Set of "type:date" keys for fast lookup.
  * For blood pressure, includes timestamp to allow multiple per day.
  */
-export async function getExistingEntryKeys(userId: string): Promise<Set<string>> {
+export async function getExistingEntryKeys(userId: string, householdMemberId?: string): Promise<Set<string>> {
+  const memberCondition = householdMemberId
+    ? eq(healthJournalEntries.householdMemberId, householdMemberId)
+    : isNull(healthJournalEntries.householdMemberId);
+
   const existingEntries = await db.query.healthJournalEntries.findMany({
-    where: eq(healthJournalEntries.userId, userId),
+    where: and(eq(healthJournalEntries.userId, userId), memberCondition),
     columns: {
       id: true,
       entryType: true,

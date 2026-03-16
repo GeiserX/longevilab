@@ -87,9 +87,15 @@ async function extractWithTesseract(pdfBuffer: Buffer): Promise<OcrResult> {
       timeout: 120_000,
     });
 
-    // Find generated page images, sorted
+    // Find generated page images, sorted numerically (page-1, page-2, ..., page-10)
     const files = await readdir(workDir);
-    const pageFiles = files.filter((f) => f.startsWith("page") && f.endsWith(".png")).sort();
+    const pageFiles = files
+      .filter((f) => f.startsWith("page") && f.endsWith(".png"))
+      .sort((a, b) => {
+        const numA = parseInt(a.replace(/\D/g, ""), 10);
+        const numB = parseInt(b.replace(/\D/g, ""), 10);
+        return numA - numB;
+      });
 
     if (pageFiles.length === 0) {
       throw new Error("pdftoppm produced no page images");

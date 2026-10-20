@@ -10,6 +10,11 @@ ENV NODE_ENV=production
 RUN apk update && apk upgrade --no-cache ca-certificates-bundle && rm -rf /var/cache/apk/*
 ENV NODE_OPTIONS=--use-openssl-ca
 
+# Trust store without the compromised eMudhra (emSign) intermediates. Node's
+# bundled roots still trust them, so read the patched Alpine bundle instead.
+RUN apk update && apk upgrade --no-cache ca-certificates-bundle && rm -rf /var/cache/apk/*
+ENV NODE_OPTIONS=--use-openssl-ca
+
 # Install OCR dependencies (Tesseract + poppler for pdftoppm)
 RUN apk add --no-cache \
   tesseract-ocr \
@@ -17,8 +22,10 @@ RUN apk add --no-cache \
   tesseract-ocr-data-spa \
   poppler-utils
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@10 --activate
+# Install pnpm for every user. A corepack shim only caches it for root, so as
+# `worker` it fetched the latest pnpm at start, and pnpm 12 refuses the
+# pnpm 10 node_modules.
+RUN npm install -g pnpm@10
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs

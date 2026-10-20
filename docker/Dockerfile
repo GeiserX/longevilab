@@ -25,6 +25,12 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Trust store without the compromised eMudhra (emSign) intermediates. Node's
+# bundled roots still trust them, so read the patched Alpine bundle instead.
+RUN apk update && apk upgrade --no-cache ca-certificates-bundle && rm -rf /var/cache/apk/* \
+    && [ "$(apk info -v | sed -n 's/^ca-certificates-bundle-\([0-9]*\)-.*/\1/p')" -ge 20261020 ]
+ENV NODE_OPTIONS=--use-openssl-ca
+
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
